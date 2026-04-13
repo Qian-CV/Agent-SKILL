@@ -1,0 +1,40 @@
+<svg width="1200" height="320" viewBox="0 0 1200 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1F33"/>
+      <stop offset="0.55" stop-color="#123E63"/>
+      <stop offset="1" stop-color="#1F7A8C"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#F3F8FB" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#F3F8FB" stop-opacity="0.04"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="320" rx="28" fill="url(#bg)"/>
+  <circle cx="1010" cy="72" r="140" fill="#9FE7D7" fill-opacity="0.12"/>
+  <circle cx="1120" cy="250" r="120" fill="#D7F171" fill-opacity="0.10"/>
+  <circle cx="180" cy="280" r="160" fill="#7CC6FE" fill-opacity="0.10"/>
+
+  <rect x="54" y="56" width="504" height="208" rx="24" fill="url(#card)" stroke="rgba(255,255,255,0.18)"/>
+  <text x="86" y="116" fill="#EAF7FF" font-size="42" font-family="Segoe UI, Arial, sans-serif" font-weight="700">CV ArXiv Assistant</text>
+  <text x="86" y="154" fill="#CFE7F5" font-size="20" font-family="Segoe UI, Arial, sans-serif">
+    Daily Chinese briefings for CV papers on arXiv
+  </text>
+  <text x="86" y="190" fill="#CFE7F5" font-size="18" font-family="Segoe UI, Arial, sans-serif">
+    Detection • VLM • Remote Sensing • UAV
+  </text>
+
+  <rect x="86" y="214" width="132" height="34" rx="17" fill="#D7F171"/>
+  <text x="106" y="236" fill="#17324D" font-size="16" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Codex Skill</text>
+  <rect x="230" y="214" width="158" height="34" rx="17" fill="#9FE7D7"/>
+  <text x="252" y="236" fill="#17324D" font-size="16" font-family="Segoe UI, Arial, sans-serif" font-weight="700">arXiv RSS Digest</text>
+
+  <rect x="666" y="56" width="458" height="208" rx="24" fill="#F8FBFD"/>
+  <rect x="692" y="84" width="116" height="20" rx="10" fill="#D8E8F0"/>
+  <rect x="692" y="118" width="290" height="14" rx="7" fill="#A0D8CC"/>
+  <rect x="692" y="146" width="378" height="14" rx="7" fill="#D8E8F0"/>
+  <rect x="692" y="174" width="332" height="14" rx="7" fill="#D8E8F0"/>
+  <rect x="692" y="208" width="180" height="30" rx="15" fill="#17324D"/>
+  <text x="716" y="228" fill="#F8FBFD" font-size="15" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Top Papers Today</text>
+</svg>

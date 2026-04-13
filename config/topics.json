@@ -1,0 +1,50 @@
+{
+  "feeds": [
+    "cs.CV",
+    "cs.AI",
+    "cs.RO",
+    "eess.IV"
+  ],
+  "topics": {
+    "object-detection": [
+      "object detection",
+      "detection",
+      "detector",
+      "open-vocabulary detection",
+      "instance detection",
+      "oriented object detection",
+      "small object",
+      "tracking by detection"
+    ],
+    "vlm": [
+      "vision-language",
+      "vision language",
+      "vlm",
+      "multimodal",
+      "multi-modal",
+      "grounding",
+      "caption",
+      "visual instruction",
+      "reasoning"
+    ],
+    "remote-sensing": [
+      "remote sensing",
+      "satellite",
+      "aerial",
+      "overhead imagery",
+      "geospatial",
+      "earth observation",
+      "hyperspectral",
+      "sar",
+      "multispectral"
+    ],
+    "uav-drone": [
+      "uav",
+      "drone",
+      "unmanned aerial vehicle",
+      "low-altitude",
+      "flight",
+      "airborne imagery"
+    ]
+  }
+}
