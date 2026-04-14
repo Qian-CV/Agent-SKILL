@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Generate a Chinese topic-focused arXiv daily markdown briefing."""
 
 from __future__ import annotations
@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import textwrap
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -20,8 +21,19 @@ from typing import Iterable
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "topics.json"
 RSS_URL = "https://rss.arxiv.org/rss/{feed}"
+API_URL = "https://export.arxiv.org/api/query?id_list={id_list}"
 MAX_SNIPPET = 280
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+ATOM_NS = {
+    "atom": "http://www.w3.org/2005/Atom",
+    "arxiv": "http://arxiv.org/schemas/atom",
+}
+
+
+@dataclass
+class Author:
+    name: str
+    affiliation: str
 
 
 @dataclass
@@ -30,7 +42,8 @@ class Paper:
     title: str
     summary: str
     link: str
-    authors: str
+    authors_text: str
+    authors: list[Author]
     feed: str
     published: datetime
     matched_topics: list[str]
@@ -44,13 +57,43 @@ def load_config(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def fetch_feed(feed: str) -> bytes:
+def fetch_url(url: str) -> bytes:
     request = urllib.request.Request(
-        RSS_URL.format(feed=feed),
-        headers={"User-Agent": "cv-arxiv-daily-brief/0.1"},
+        url,
+        headers={"User-Agent": "cv-arxiv-daily-brief/0.2"},
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         return response.read()
+
+
+def fetch_feed(feed: str) -> bytes:
+    return fetch_url(RSS_URL.format(feed=feed))
+
+
+def fetch_author_metadata(arxiv_ids: list[str]) -> dict[str, list[Author]]:
+    metadata: dict[str, list[Author]] = {}
+    if not arxiv_ids:
+        return metadata
+
+    chunk_size = 20
+    for start in range(0, len(arxiv_ids), chunk_size):
+        chunk = arxiv_ids[start : start + chunk_size]
+        query = urllib.parse.quote(",".join(chunk), safe=",")
+        payload = fetch_url(API_URL.format(id_list=query))
+        root = ET.fromstring(payload)
+        for entry in root.findall("atom:entry", ATOM_NS):
+            entry_id = normalize_arxiv_id(entry.findtext("atom:id", default="", namespaces=ATOM_NS))
+            authors: list[Author] = []
+            for author_node in entry.findall("atom:author", ATOM_NS):
+                name = normalize_spaces(author_node.findtext("atom:name", default="", namespaces=ATOM_NS))
+                affiliation = normalize_spaces(
+                    author_node.findtext("arxiv:affiliation", default="", namespaces=ATOM_NS)
+                )
+                if name:
+                    authors.append(Author(name=name, affiliation=affiliation or "未提供单位信息"))
+            if entry_id:
+                metadata[entry_id] = authors
+    return metadata
 
 
 def strip_html(text: str) -> str:
@@ -76,12 +119,23 @@ def parse_date(value: str) -> datetime:
 
 def extract_id(link: str) -> str:
     tail = link.rstrip("/").split("/")[-1]
-    return tail or link
+    return normalize_arxiv_id(tail or link)
+
+
+def normalize_arxiv_id(value: str) -> str:
+    tail = value.rstrip("/").split("/")[-1]
+    tail = re.sub(r"v\d+$", "", tail)
+    return tail.strip()
 
 
 def split_sentences(text: str) -> list[str]:
-    sentences = [normalize_spaces(part) for part in SENTENCE_SPLIT_RE.split(text) if normalize_spaces(part)]
-    return sentences
+    return [normalize_spaces(part) for part in SENTENCE_SPLIT_RE.split(text) if normalize_spaces(part)]
+
+
+def truncate(text: str, limit: int = MAX_SNIPPET) -> str:
+    if len(text) <= limit:
+        return text
+    return textwrap.shorten(text, width=limit, placeholder="...")
 
 
 def pick_background(summary: str, matched_topics: list[str]) -> str:
@@ -89,37 +143,34 @@ def pick_background(summary: str, matched_topics: list[str]) -> str:
         "object-detection": "目标检测",
         "vlm": "视觉语言建模",
         "remote-sensing": "遥感影像理解",
-        "uav-drone": "无人机低空影像分析",
+        "uav-drone": "无人机低空视觉",
     }
     sentences = split_sentences(summary)
-    if sentences:
-        lead = truncate(sentences[0], 120)
-    else:
-        lead = "摘要中没有足够的上下文。"
+    lead = truncate(sentences[0], 120) if sentences else "摘要中没有足够的上下文。"
     topics = [topic_map.get(topic, topic) for topic in matched_topics]
     if topics:
-        return f"论文聚焦于{ '、'.join(topics) }相关问题。根据摘要，核心背景可概括为：{lead}"
+        return f"论文聚焦于{'、'.join(topics)}相关问题。根据摘要，核心背景可概括为：{lead}"
     return f"从摘要看，这项工作面向一个通用视觉任务。核心背景可概括为：{lead}"
 
 
 def pick_motivation(summary: str) -> str:
     lowered = summary.lower()
     motivation_patterns = [
-        ("challenging", "作者强调该任务仍然具有较强挑战性，现有方法在复杂场景下可能不稳定。"),
+        ("challenging", "作者强调该任务仍然具有较强挑战性，现有方法在复杂场景下可能不够稳定。"),
         ("limited", "作者指出现有方法存在明显局限，说明当前方案在泛化、效率或鲁棒性上仍有缺口。"),
-        ("robust", "动机之一可能是提升模型在真实场景中的鲁棒性与稳定性。"),
-        ("efficient", "动机之一可能是降低计算或部署成本，提高训练和推理效率。"),
+        ("robust", "这项工作的动机之一很可能是提升模型在真实场景中的鲁棒性与稳定性。"),
+        ("efficient", "这项工作的动机之一很可能是降低计算和部署成本，提高训练与推理效率。"),
         ("generaliz", "作者可能希望提升跨场景、跨域或跨任务的泛化能力。"),
         ("small object", "摘要暗示小目标或细粒度目标仍然难以可靠识别，这通常是该工作的直接动机。"),
-        ("ground", "摘要表明跨模态对齐或 grounding 能力仍不足，这通常是推动方法设计的关键动机。"),
+        ("ground", "摘要表明跨模态对齐或 grounding 能力仍然不足，这通常是方法设计的关键动机。"),
     ]
     for pattern, text in motivation_patterns:
         if pattern in lowered:
             return text
     sentences = split_sentences(summary)
     if len(sentences) > 1:
-        return f"从摘要描述看，作者的主要动机是解决这样一个瓶颈：{truncate(sentences[1], 140)}"
-    return "摘要没有直接展开动机，我倾向于认为作者是在尝试弥补现有方案在效果、泛化或效率上的短板。"
+        return f"从摘要描述看，作者主要在试图解决这样一个瓶颈：{truncate(sentences[1], 140)}"
+    return "摘要没有完全展开动机，我倾向于认为作者是在补足现有方案在效果、泛化或效率上的短板。"
 
 
 def extract_innovations(summary: str) -> list[str]:
@@ -152,9 +203,9 @@ def innovation_problem_map(innovation: str) -> str:
     if any(token in lowered for token in ("robust", "noise", "occlusion", "domain", "generaliz")):
         return "主要试图缓解复杂场景下鲁棒性不足和跨域泛化差的问题。"
     if any(token in lowered for token in ("ground", "language", "multimodal", "vision-language", "vlm")):
-        return "主要试图缓解视觉与语言对齐不充分、语义 grounding 不稳定的问题。"
+        return "主要试图缓解视觉与语言对齐不足、grounding 不稳定的问题。"
     if any(token in lowered for token in ("small object", "oriented", "remote", "aerial", "drone", "sar")):
-        return "主要试图缓解遥感或低空场景中小目标、密集目标或特殊视角建模困难的问题。"
+        return "主要试图缓解遥感或低空场景中的小目标、密集目标或特殊视角建模难题。"
     return "主要试图缓解现有方法在表示能力、训练稳定性或任务适配性上的不足。"
 
 
@@ -210,9 +261,8 @@ def score_novelty(title: str, summary: str, matched_topics: list[str]) -> tuple[
 
     score = max(1, min(5, score))
     if not reasons:
-        reasons.append("摘要提供的信息有限，当前评分更偏保守")
-    rationale = "；".join(reasons[:3]) + "。"
-    return score, rationale
+        reasons.append("摘要提供的信息有限，当前评分偏保守")
+    return score, "；".join(reasons[:3]) + "。"
 
 
 def score_paper(title: str, summary: str, topics: dict[str, list[str]]) -> tuple[list[str], list[str], int]:
@@ -224,9 +274,10 @@ def score_paper(title: str, summary: str, topics: dict[str, list[str]]) -> tuple
     for topic, keywords in topics.items():
         topic_hit = False
         for keyword in keywords:
-            if keyword.lower() in haystack:
+            keyword_lower = keyword.lower()
+            if keyword_lower in haystack:
                 matched_keywords.append(keyword)
-                score += 3 if keyword.lower() in title.lower() else 1
+                score += 3 if keyword_lower in title.lower() else 1
                 topic_hit = True
         if topic_hit:
             matched_topics.append(topic)
@@ -247,7 +298,7 @@ def parse_feed(feed: str, payload: bytes, topics: dict[str, list[str]]) -> list[
         title = strip_html(item.findtext("title", default="Untitled"))
         summary = strip_html(item.findtext("description", default=""))
         link = item.findtext("link", default="").strip()
-        authors = strip_html(item.findtext(creator_tag, default="Unknown authors"))
+        authors_text = strip_html(item.findtext(creator_tag, default="Unknown authors"))
         published = parse_date(item.findtext("pubDate", default=""))
         arxiv_id = extract_id(link)
         matched_topics, matched_keywords, score = score_paper(title, summary, topics)
@@ -258,7 +309,8 @@ def parse_feed(feed: str, payload: bytes, topics: dict[str, list[str]]) -> list[
                 title=title,
                 summary=summary,
                 link=link,
-                authors=authors,
+                authors_text=authors_text,
+                authors=[],
                 feed=feed,
                 published=published,
                 matched_topics=matched_topics,
@@ -281,10 +333,26 @@ def dedupe(papers: Iterable[Paper]) -> list[Paper]:
     return list(best_by_id.values())
 
 
-def truncate(text: str, limit: int = MAX_SNIPPET) -> str:
-    if len(text) <= limit:
-        return text
-    return textwrap.shorten(text, width=limit, placeholder="...")
+def attach_author_metadata(papers: list[Paper]) -> None:
+    author_metadata = fetch_author_metadata([paper.arxiv_id for paper in papers])
+    for paper in papers:
+        paper.authors = author_metadata.get(paper.arxiv_id, [])
+
+
+def format_author_block(paper: Paper) -> str:
+    if paper.authors:
+        return "\n".join(
+            f"  {index}. {author.name} | 第一单位: {author.affiliation}"
+            for index, author in enumerate(paper.authors, start=1)
+        )
+
+    fallback_authors = [normalize_spaces(part) for part in paper.authors_text.split(",") if normalize_spaces(part)]
+    if fallback_authors:
+        return "\n".join(
+            f"  {index}. {name} | 第一单位: 未提供单位信息"
+            for index, name in enumerate(fallback_authors, start=1)
+        )
+    return "  1. 未解析到作者信息 | 第一单位: 未提供单位信息"
 
 
 def format_paper(paper: Paper) -> str:
@@ -298,18 +366,19 @@ def format_paper(paper: Paper) -> str:
     for index, innovation in enumerate(innovations, start=1):
         innovation_lines.append(
             f"  {index}. 创新点：{innovation}\n"
-            f"     解决问题：{innovation_problem_map(innovation)}"
+            f"     主要解决：{innovation_problem_map(innovation)}"
         )
     if not innovation_lines:
-        innovation_lines.append("  1. 创新点：摘要没有明确写出方法设计，建议打开原文进一步确认。")
+        innovation_lines.append("  1. 创新点：摘要没有明确展开方法设计，建议打开原文进一步确认。")
+
     return (
         f"### {paper.title}\n"
         f"- arXiv: [{paper.arxiv_id}]({paper.link})\n"
-        f"- 作者: {paper.authors}\n"
         f"- 来源分区: `{paper.feed}`\n"
         f"- 发布时间: {published}\n"
         f"- 关注主题: {topics}\n"
         f"- 命中关键词: {keywords}\n"
+        f"- 作者与第一单位:\n{format_author_block(paper)}\n"
         f"- 创新性评分: {paper.novelty_score}/5\n"
         f"- 评分依据: {paper.novelty_rationale}\n"
         f"- 研究背景与动机: {background} {motivation}\n"
@@ -337,7 +406,8 @@ def build_markdown(papers: list[Paper], max_papers: int, max_per_topic: int) -> 
         f"- 生成时间: {now}",
         f"- 扫描候选论文数: {len(papers)}",
         f"- 命中主题论文数: {len(matched)}",
-        "- 说明: 创新性评分是基于标题与摘要的启发式初评，用于快速筛读，不等同于正式审稿结论。",
+        "- 说明: 创新性评分基于标题与摘要做快速初筛，用于帮助确定阅读优先级，不等同于正式审稿结论。",
+        "- 说明: 作者单位优先读取 arXiv Atom 元数据中的 affiliation；若论文未提供，则会明确标注“未提供单位信息”。",
         "",
         "## 今日优先阅读",
         "",
@@ -349,7 +419,6 @@ def build_markdown(papers: list[Paper], max_papers: int, max_per_topic: int) -> 
     else:
         lines.extend(
             [
-                "No topic-matched papers were found in the selected feeds.",
                 "今天在选定 feed 中没有匹配到关注主题的论文。",
                 "",
             ]
@@ -381,6 +450,7 @@ def main() -> int:
         collected.extend(parse_feed(feed, payload, topics))
 
     papers = dedupe(collected)
+    attach_author_metadata(papers)
     markdown = build_markdown(papers, max_papers=args.max_papers, max_per_topic=args.max_per_topic)
     args.output.write_text(markdown, encoding="utf-8")
     print(f"Wrote digest to {args.output}")

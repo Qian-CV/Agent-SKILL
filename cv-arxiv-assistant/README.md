@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
   <img src="./assets/banner.svg" alt="CV ArXiv Assistant banner" width="100%" />
 </p>
 
@@ -20,6 +20,7 @@ Instead of dumping a long paper list, this project focuses on fast research tria
 - group papers by CV subtopic
 - write concise Chinese judgments
 - keep a reviewer-style novelty score for quick filtering
+- list all paper authors and each author's first affiliation when available
 - emphasize topics such as object detection, vision-language models, remote sensing, and UAV or drone imagery
 
 ## Preview
@@ -41,6 +42,7 @@ The actual generated markdown will usually include:
 - a `Top Papers Today` section
 - topic buckets such as VLM, remote sensing, UAV, or detection
 - concise Chinese judgments for each selected paper
+- all authors plus the first affiliation attached to each author
 - novelty scores for triage
 - short reading recommendations at the end
 
@@ -49,7 +51,7 @@ The actual generated markdown will usually include:
 - `skills/cv-arxiv-briefing/SKILL.md`
   The Codex skill definition. It tells Codex how to collect papers, score them conservatively, and write the brief in Chinese.
 - `scripts/daily_digest.py`
-  A Python script that fetches arXiv RSS feeds, matches topic keywords, scores papers, and writes a markdown digest.
+  A Python script that fetches arXiv RSS feeds, matches topic keywords, enriches author metadata, scores papers, and writes a markdown digest.
 - `config/topics.json`
   Topic configuration for feeds and keywords.
 
@@ -58,6 +60,7 @@ The actual generated markdown will usually include:
 The generated brief is designed for daily reading, not archival metadata only. A good output should include:
 
 - short Chinese summaries instead of translated abstracts
+- author lists with first affiliations when available in arXiv metadata
 - a conservative novelty score from `1/5` to `5/5`
 - brief notes on background, motivation, and why the paper is worth reading
 
@@ -149,6 +152,7 @@ The project intentionally keeps this score conservative when only the title and 
 ## Notes
 
 - The script uses arXiv RSS feeds, so network access is required when generating a fresh brief.
+- Author affiliations are read from arXiv Atom metadata when available. If arXiv does not provide them, the output will explicitly say so instead of guessing.
 - The generated output is best treated as a first-pass research assistant, then refined by a human or by a second Codex pass.
 - If you use scheduled automations, date-based output filenames are strongly recommended to keep daily records clean.
 
