@@ -388,8 +388,13 @@ def format_paper(paper: Paper) -> str:
 
 
 def build_markdown(papers: list[Paper], max_papers: int, max_per_topic: int) -> str:
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now_local = datetime.now().astimezone()
+    now = now_local.strftime("%Y-%m-%d %H:%M %Z")
     matched = [paper for paper in papers if paper.score > 0]
+    today_local = now_local.date()
+    today_matched = [
+        paper for paper in matched if paper.published.astimezone(now_local.tzinfo).date() == today_local
+    ]
     matched.sort(key=lambda paper: (paper.score, paper.novelty_score, paper.published), reverse=True)
     priority = matched[:max_papers]
 
@@ -404,8 +409,9 @@ def build_markdown(papers: list[Paper], max_papers: int, max_per_topic: int) -> 
         "# CV arXiv 中文简报",
         "",
         f"- 生成时间: {now}",
-        f"- 扫描候选论文数: {len(papers)}",
-        f"- 命中主题论文数: {len(matched)}",
+        f"- 一共扫描文章: {len(papers)} 篇",
+        f"- 今天命中主题文章: {len(today_matched)} 篇",
+        f"- 当前抓取范围内命中主题文章: {len(matched)} 篇",
         "- 说明: 创新性评分基于标题与摘要做快速初筛，用于帮助确定阅读优先级，不等同于正式审稿结论。",
         "- 说明: 作者单位优先读取 arXiv Atom 元数据中的 affiliation；若论文未提供，则会明确标注“未提供单位信息”。",
         "",

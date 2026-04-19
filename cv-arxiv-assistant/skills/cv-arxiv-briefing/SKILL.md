@@ -31,6 +31,10 @@ Produce a Chinese daily reading brief instead of a generic paper list.
 
 Keep the markdown focused on fast triage and write all narrative text in Chinese:
 
+- start the README with a short daily summary block
+- the summary block must explicitly state:
+  - how many papers were scanned in total
+  - how many topic-matched papers were published today
 - `今日优先阅读` first
 - topic buckets next
 - concise Chinese summaries instead of long rewrites
@@ -47,6 +51,7 @@ Keep the markdown focused on fast triage and write all narrative text in Chinese
 - When judging novelty, prioritize method-level contributions over pure scaling, dataset size, or training tricks.
 - When writing `作者与第一单位`, list every author in order and give the first affiliation attached to that author.
 - Do not invent affiliations. If arXiv metadata does not provide one, write `未提供单位信息`.
+- When counting `今天命中了多少篇`, use the paper publish date converted to local time and count only topic-matched papers from that local calendar day.
 - When writing `研究背景与动机`, answer:
   - what broader task or application setting the paper sits in
   - what limitation of prior work the authors are trying to fix
